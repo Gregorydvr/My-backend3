@@ -28,14 +28,16 @@ app.post("/schedule", (req, res) => {
   try {
     const prefs = req.body;
     console.log("Received new preferences:", prefs);
+
     const index = userPreferences.findIndex(u => u.expoPushToken === prefs.expoPushToken);
     if (index >= 0) {
+      // Update existing user
       const user = userPreferences[index];
       user.motivationEnabled = prefs.motivationEnabled;
       user.screenTimeEnabled = prefs.screenTimeEnabled;
       user.nudgeEnabled = prefs.nudgeEnabled;
-      user.screenTime = prefs.screenTime; // interval for screen time notifications
-      user.nudgeTime = prefs.nudgeTime;   // interval for A Nudge notifications
+      user.screenTime = prefs.screenTime;
+      user.nudgeTime = prefs.nudgeTime;
 
       // Initialize or reset screen time tracking if toggled on/off
       if (user.screenTimeEnabled) {
@@ -48,7 +50,7 @@ app.post("/schedule", (req, res) => {
         user.screenTimeCount = 0;
       }
 
-      // Initialize nudge tracking if toggled on/off
+      // Initialize or reset nudge tracking if toggled on/off
       if (user.nudgeEnabled) {
         if (!user.lastNudgeSent) {
           user.lastNudgeSent = new Date();
@@ -64,6 +66,7 @@ app.post("/schedule", (req, res) => {
         user.usedQuotes = [];
       }
     } else {
+      // Add new user
       const newUser = {
         ...prefs,
         usedQuotes: prefs.motivationEnabled ? [] : [],
@@ -71,10 +74,11 @@ app.post("/schedule", (req, res) => {
         screenTimeCount: 0,
         lastNudgeSent: prefs.nudgeEnabled ? new Date() : null,
         lastSpecialNudgeSent: null,
-        lastActive: null
+        lastActive: null,
       };
       userPreferences.push(newUser);
     }
+
     res.json({ success: true });
   } catch (error) {
     console.error("Error in /schedule route:", error);
@@ -89,10 +93,11 @@ app.post("/appstate", (req, res) => {
   try {
     const { expoPushToken, lastActive, appState } = req.body;
     console.log("Received app state update:", expoPushToken, appState, lastActive);
+
     const user = userPreferences.find(u => u.expoPushToken === expoPushToken);
     if (user) {
       user.lastActive = new Date(lastActive);
-      res.json({ success: true });
+      res.json({ success: true, message: "App state updated" });
     } else {
       res.status(404).json({ success: false, error: "User not found" });
     }
@@ -149,7 +154,13 @@ cron.schedule("* * * * *", async () => {
         const randomIndex = Math.floor(Math.random() * availableQuotes.length);
         const selectedQuote = availableQuotes[randomIndex];
         user.usedQuotes.push(selectedQuote);
-        await sendPushNotification(user.expoPushToken, "✨ Daily Motivation", selectedQuote, true);
+
+        await sendPushNotification(
+          user.expoPushToken,
+          "✨ Daily Motivation",
+          selectedQuote,
+          true // vibrate
+        );
       }
     }
   }
@@ -159,6 +170,7 @@ cron.schedule("* * * * *", async () => {
     if (user.screenTimeEnabled && user.screenTimeStart) {
       const elapsedMs = now - new Date(user.screenTimeStart);
       const elapsedHours = elapsedMs / (1000 * 60 * 60);
+      // If enough hours have passed since the last notification
       if (elapsedHours >= (user.screenTimeCount + 1) * user.screenTime) {
         let message = "";
         if (user.screenTimeCount === 0) {
@@ -166,7 +178,13 @@ cron.schedule("* * * * *", async () => {
         } else {
           message = `You have spent another ${user.screenTime} hour${user.screenTime > 1 ? "s" : ""} on your phone`;
         }
-        await sendPushNotification(user.expoPushToken, "📱 Screen Time", message, true);
+
+        await sendPushNotification(
+          user.expoPushToken,
+          "📱 Screen Time",
+          message,
+          true // vibrate
+        );
         user.screenTimeCount += 1;
       }
     }
@@ -188,18 +206,30 @@ cron.schedule("* * * * *", async () => {
             (!user.lastSpecialNudgeSent ||
               new Date(user.lastSpecialNudgeSent).toDateString() !== todayStr)
           ) {
-            await sendPushNotification(user.expoPushToken, "Good Morning!", "It's a new day to not go on your phone", false);
+            await sendPushNotification(
+              user.expoPushToken,
+              "Good Morning!",
+              "It's a new day to not go on your phone",
+              false // no vibration
+            );
             user.lastSpecialNudgeSent = now;
           }
-          // Repeated A Nudge notifications based on the chosen interval (in hours, can be 0.5, 1, or 2)
+
+          // Repeated A Nudge notifications based on the chosen interval
           if (user.lastNudgeSent) {
             const elapsedMsNudge = now - new Date(user.lastNudgeSent);
             const intervalMs = user.nudgeTime * 60 * 60 * 1000;
             if (elapsedMsNudge >= intervalMs) {
-              await sendPushNotification(user.expoPushToken, "A Nudge", "Tap this and take control of your screen time today", false);
+              await sendPushNotification(
+                user.expoPushToken,
+                "A Nudge",
+                "Tap this and take control of your screen time today",
+                false // no vibration
+              );
               user.lastNudgeSent = now;
             }
           } else {
+            // If lastNudgeSent was null, set it now so the timer starts
             user.lastNudgeSent = now;
           }
         }
