@@ -1,6 +1,6 @@
 // index.js
 const express = require("express");
-const fetch = require("node-fetch");
+const fetch = require("node-fetch").default; // <-- IMPORTANT CHANGE HERE
 const cron = require("node-cron");
 
 const app = express();
@@ -29,7 +29,9 @@ app.post("/schedule", (req, res) => {
     const prefs = req.body;
     console.log("Received new preferences:", prefs);
 
-    const index = userPreferences.findIndex(u => u.expoPushToken === prefs.expoPushToken);
+    const index = userPreferences.findIndex(
+      (u) => u.expoPushToken === prefs.expoPushToken
+    );
     if (index >= 0) {
       // Update existing user
       const user = userPreferences[index];
@@ -94,7 +96,7 @@ app.post("/appstate", (req, res) => {
     const { expoPushToken, lastActive, appState } = req.body;
     console.log("Received app state update:", expoPushToken, appState, lastActive);
 
-    const user = userPreferences.find(u => u.expoPushToken === expoPushToken);
+    const user = userPreferences.find((u) => u.expoPushToken === expoPushToken);
     if (user) {
       user.lastActive = new Date(lastActive);
       res.json({ success: true, message: "App state updated" });
@@ -117,7 +119,7 @@ async function sendPushNotification(expoPushToken, title, body, vibrate) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json",
+        Accept: "application/json",
       },
       body: JSON.stringify({
         to: expoPushToken,
@@ -146,7 +148,9 @@ cron.schedule("* * * * *", async () => {
   if ((currentHour === 10 && currentMinute === 0) || (currentHour === 14 && currentMinute === 0)) {
     for (const user of userPreferences) {
       if (user.motivationEnabled) {
-        let availableQuotes = motivationalQuotes.filter(q => !user.usedQuotes.includes(q));
+        let availableQuotes = motivationalQuotes.filter(
+          (q) => !user.usedQuotes.includes(q)
+        );
         if (availableQuotes.length === 0) {
           user.usedQuotes = [];
           availableQuotes = motivationalQuotes;
@@ -174,9 +178,13 @@ cron.schedule("* * * * *", async () => {
       if (elapsedHours >= (user.screenTimeCount + 1) * user.screenTime) {
         let message = "";
         if (user.screenTimeCount === 0) {
-          message = `You have spent ${user.screenTime} hour${user.screenTime > 1 ? "s" : ""} on your phone`;
+          message = `You have spent ${user.screenTime} hour${
+            user.screenTime > 1 ? "s" : ""
+          } on your phone`;
         } else {
-          message = `You have spent another ${user.screenTime} hour${user.screenTime > 1 ? "s" : ""} on your phone`;
+          message = `You have spent another ${user.screenTime} hour${
+            user.screenTime > 1 ? "s" : ""
+          } on your phone`;
         }
 
         await sendPushNotification(
@@ -197,7 +205,7 @@ cron.schedule("* * * * *", async () => {
     if (user.nudgeEnabled) {
       if (currentHour >= 9 && currentHour < 19) {
         const lastActive = user.lastActive ? new Date(user.lastActive) : null;
-        if (!lastActive || (now - lastActive > appClosedThreshold)) {
+        if (!lastActive || now - lastActive > appClosedThreshold) {
           // Special daily nudge at 09:00 (sent only once per day)
           const todayStr = now.toDateString();
           if (
