@@ -1,6 +1,6 @@
 // index.js
 const express = require("express");
-const fetch = require("node-fetch").default; // <-- IMPORTANT CHANGE HERE
+const fetch = require("node-fetch").default; // <-- IMPORTANT: .default for node-fetch v3
 const cron = require("node-cron");
 
 const app = express();
@@ -203,6 +203,7 @@ cron.schedule("* * * * *", async () => {
   const appClosedThreshold = 5 * 60 * 1000; // 5 minutes in ms
   for (const user of userPreferences) {
     if (user.nudgeEnabled) {
+      // Only send "A Nudge" between 09:00 and 19:00 local server time
       if (currentHour >= 9 && currentHour < 19) {
         const lastActive = user.lastActive ? new Date(user.lastActive) : null;
         if (!lastActive || now - lastActive > appClosedThreshold) {
